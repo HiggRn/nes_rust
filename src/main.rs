@@ -5,6 +5,7 @@ use sdl2::pixels::Color;
 use sdl2::pixels::PixelFormatEnum;
 use sdl2::EventPump;
 
+mod bus;
 mod cpu;
 mod opcode;
 

@@ -1,5 +1,7 @@
-use crate::opcode;
 use bitflags::bitflags;
+
+use crate::bus::Bus;
+use crate::opcode;
 
 bitflags! {
     /// # Status Register (P) http://wiki.nesdev.com/w/index.php/Status_flags
@@ -27,9 +29,6 @@ bitflags! {
     }
 }
 
-const STACK: u16 = 0x0100;
-const STACK_RESET: u8 = 0xFD;
-
 pub struct Cpu {
     pub register_a: u8,
     pub register_x: u8,
@@ -37,8 +36,11 @@ pub struct Cpu {
     pub status: CpuFlags,
     pub program_counter: u16,
     pub stack_pointer: u8,
-    memory: [u8; 0xFFFF],
+    pub bus: Bus,
 }
+
+const STACK: u16 = 0x0100;
+const STACK_RESET: u8 = 0xFD;
 
 #[derive(Clone, Copy, Debug)]
 pub enum AddressingMode {
@@ -72,11 +74,19 @@ pub trait Mem {
 
 impl Mem for Cpu {
     fn mem_read(&self, addr: u16) -> u8 {
-        self.memory[addr as usize]
+        self.bus.mem_read(addr)
     }
 
     fn mem_write(&mut self, addr: u16, data: u8) {
-        self.memory[addr as usize] = data;
+        self.bus.mem_write(addr, data);
+    }
+
+    fn mem_read_u16(&self, addr: u16) -> u16 {
+        self.bus.mem_read_u16(addr)
+    }
+
+    fn mem_write_u16(&mut self, addr: u16, data: u16) {
+        self.bus.mem_write_u16(addr, data);
     }
 }
 
@@ -86,10 +96,10 @@ impl Cpu {
             register_a: 0,
             register_x: 0,
             register_y: 0,
-            status: CpuFlags::from_bits_truncate(0b100100),
+            status: CpuFlags::from_bits_truncate(0x24),
             program_counter: 0,
             stack_pointer: STACK_RESET,
-            memory: [0; 0xFFFF],
+            bus: Bus::new(),
         }
     }
 
@@ -100,14 +110,16 @@ impl Cpu {
     }
 
     pub fn load(&mut self, program: Vec<u8>) {
-        self.memory[0x0600..(0x0600 + program.len())].copy_from_slice(&program);
+        for i in 0..program.len() {
+            self.mem_write(0x0600 + i as u16, program[i]);
+        }
         self.mem_write_u16(0xFFFC, 0x0600);
     }
 
     pub fn reset(&mut self) {
         self.register_a = 0;
         self.register_x = 0;
-        self.status = CpuFlags::from_bits_truncate(0b100100);
+        self.status = CpuFlags::from_bits_truncate(0x24);
         self.stack_pointer = STACK_RESET;
 
         self.program_counter = self.mem_read_u16(0xFFFC);
@@ -325,7 +337,7 @@ impl Cpu {
         }
     }
 
-    // 6502 CPU instructions
+    /// 6502 CPU instructions
 
     fn adc(&mut self, mode: AddressingMode) {
         let addr = self.get_operand_address(mode);
@@ -501,7 +513,7 @@ impl Cpu {
         self.update_zero_and_negative_flags(self.register_x);
     }
 
-    // Utility methods
+    /// Utility methods
 
     /// note: ignoring decimal mode
     /// http://www.righto.com/2012/12/the-6502-overflow-flag-explained.html
