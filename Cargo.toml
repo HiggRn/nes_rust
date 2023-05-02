@@ -1,0 +1,13 @@
+[package]
+name = "nes_rust"
+version = "0.1.0"
+authors = ["bugzmanov <bugzmanov@gmail.com>", "HiggRn <zijie.gu0115@gmail.com>"]
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+lazy_static = "1.4.0"
+bitflags = "2.2.1"
+sdl2 = "0.35.2"
+rand = "0.8.5"
