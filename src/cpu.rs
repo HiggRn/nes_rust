@@ -3,6 +3,16 @@ use bitflags::bitflags;
 use crate::bus::Bus;
 use crate::opcode;
 
+pub struct Cpu {
+    pub register_a: u8,
+    pub register_x: u8,
+    pub register_y: u8,
+    pub status: CpuFlags,
+    pub program_counter: u16,
+    pub stack_pointer: u8,
+    pub bus: Bus,
+}
+
 bitflags! {
     /// # Status Register (P) http://wiki.nesdev.com/w/index.php/Status_flags
     ///
@@ -27,16 +37,6 @@ bitflags! {
         const OVERFLOW          = 0b01000000;
         const NEGATIVE          = 0b10000000;
     }
-}
-
-pub struct Cpu {
-    pub register_a: u8,
-    pub register_x: u8,
-    pub register_y: u8,
-    pub status: CpuFlags,
-    pub program_counter: u16,
-    pub stack_pointer: u8,
-    pub bus: Bus,
 }
 
 const STACK: u16 = 0x0100;
@@ -91,7 +91,7 @@ impl Mem for Cpu {
 }
 
 impl Cpu {
-    pub fn new() -> Self {
+    pub fn new(bus: Bus) -> Self {
         Self {
             register_a: 0,
             register_x: 0,
@@ -99,10 +99,11 @@ impl Cpu {
             status: CpuFlags::from_bits_truncate(0x24),
             program_counter: 0,
             stack_pointer: STACK_RESET,
-            bus: Bus::new(),
+            bus,
         }
     }
 
+    #[cfg(test)]
     pub fn load_and_run(&mut self, program: Vec<u8>) {
         self.load(program);
         self.reset();
@@ -110,8 +111,8 @@ impl Cpu {
     }
 
     pub fn load(&mut self, program: Vec<u8>) {
-        for i in 0..program.len() {
-            self.mem_write(0x0600 + i as u16, program[i]);
+        for (i, data) in program.iter().enumerate() {
+            self.mem_write(0x0600 + i as u16, *data);
         }
         self.mem_write_u16(0xFFFC, 0x0600);
     }
@@ -659,10 +660,12 @@ impl Cpu {
 #[cfg(test)]
 mod test {
     use super::*;
+    use crate::cartridge::test;
 
     #[test]
     fn test_0xa9_lda_immediate_load_data() {
-        let mut cpu = Cpu::new();
+        let bus = Bus::new(test::test_rom());
+        let mut cpu = Cpu::new(bus);
         cpu.load_and_run(vec![0xA9, 0x05, 0x00]);
         assert_eq!(cpu.register_a, 0x05);
         assert!(!cpu.status.contains(CpuFlags::ZERO));
@@ -671,28 +674,32 @@ mod test {
 
     #[test]
     fn test_0xaa_tax_move_a_to_x() {
-        let mut cpu = Cpu::new();
+        let bus = Bus::new(test::test_rom());
+        let mut cpu = Cpu::new(bus);
         cpu.load_and_run(vec![0xA9, 0x0A, 0xAA, 0x00]);
         assert_eq!(cpu.register_x, 10)
     }
 
     #[test]
     fn test_5_ops_working_together() {
-        let mut cpu = Cpu::new();
+        let bus = Bus::new(test::test_rom());
+        let mut cpu = Cpu::new(bus);
         cpu.load_and_run(vec![0xA9, 0xC0, 0xAA, 0xE8, 0x00]);
         assert_eq!(cpu.register_x, 0xc1)
     }
 
     #[test]
     fn test_inx_overflow() {
-        let mut cpu = Cpu::new();
+        let bus = Bus::new(test::test_rom());
+        let mut cpu = Cpu::new(bus);
         cpu.load_and_run(vec![0xA9, 0xFF, 0xAA, 0xE8, 0xE8, 0x00]);
         assert_eq!(cpu.register_x, 1)
     }
 
     #[test]
     fn test_lda_from_memory() {
-        let mut cpu = Cpu::new();
+        let bus = Bus::new(test::test_rom());
+        let mut cpu = Cpu::new(bus);
         cpu.mem_write(0x10, 0x55);
         cpu.load_and_run(vec![0xa5, 0x10, 0x00]);
         assert_eq!(cpu.register_a, 0x55);
